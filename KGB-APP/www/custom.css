@@ -4,7 +4,8 @@
   box-sizing: border-box;
 }
 
-body, html {
+body,
+html {
   margin: 0;
   padding: 0;
   background: #f5f7fb;
@@ -209,7 +210,7 @@ body, html {
 
 #hero-carousel {
   position: relative;
-  height: 260px;
+  height: 320px;
   border-radius: 16px;
   overflow: hidden;
   background: #e5e7eb;
@@ -262,6 +263,20 @@ body, html {
 .value-delta {
   color: #10b981;
   font-weight: 600;
+}
+
+#mpg_anim {
+  width: 100%;
+  overflow: hidden;
+}
+
+#mpg_anim img {
+  width: 100%;
+  max-height: 420px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  border-radius: 12px;
 }
 
 .analysis-section h3 {
@@ -328,14 +343,14 @@ body, html {
   margin-top: 0;
 }
 
-.tabbable > .nav-pills > li > a {
+.tabbable>.nav-pills>li>a {
   border-radius: 12px;
   font-weight: 600;
   color: #6b7280;
 }
 
-.tabbable > .nav-pills > li.active > a,
-.tabbable > .nav-pills > li > a:hover {
+.tabbable>.nav-pills>li.active>a,
+.tabbable>.nav-pills>li>a:hover {
   background: linear-gradient(135deg, #7c3aed, #6366f1);
   color: #ffffff;
 }
@@ -379,10 +394,68 @@ body.dark-mode .side-link.active {
   color: #c4d7ff;
 }
 
+/* Dark mode: improve DataTable legibility */
+body.dark-mode .dataTables_wrapper,
+body.dark-mode table.dataTable {
+  color: #e5e7eb;
+}
+
+body.dark-mode table.dataTable thead th,
+body.dark-mode table.dataTable tbody td {
+  color: #e5e7eb;
+  border-color: #1f2937;
+}
+
+body.dark-mode table.dataTable tbody tr {
+  background: #0f172a;
+}
+
+body.dark-mode table.dataTable.stripe tbody tr:nth-child(odd),
+body.dark-mode table.dataTable.display tbody tr:nth-child(odd) {
+  background: #111827;
+}
+
+body.dark-mode table.dataTable.display tbody tr:hover {
+  background: #1f2937;
+}
+
+body.dark-mode .dataTables_wrapper .dataTables_filter input,
+body.dark-mode .dataTables_wrapper .dataTables_length select,
+body.dark-mode .dataTables_wrapper .dataTables_paginate .paginate_button,
+body.dark-mode .form-control,
+body.dark-mode select,
+body.dark-mode input[type=text],
+body.dark-mode input[type=number],
+body.dark-mode input[type=password] {
+  background: #0b1220;
+  color: #e5e7eb;
+  border: 1px solid #334155;
+}
+
+body.dark-mode .dataTables_wrapper .dataTables_paginate .paginate_button {
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+body.dark-mode .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+body.dark-mode .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #1f2937 !important;
+  color: #c4d7ff !important;
+  border-color: #475569;
+}
+
+body.dark-mode .dataTables_wrapper .dataTables_info,
+body.dark-mode .dataTables_wrapper .dataTables_filter label,
+body.dark-mode .dataTables_wrapper .dataTables_length label,
+body.dark-mode .dataTables_wrapper .dataTables_paginate {
+  color: #cbd5e1 !important;
+}
+
 @media (max-width: 1100px) {
   .home-grid {
     grid-template-columns: 1fr;
   }
+
   .sidebar {
     width: 210px;
   }
@@ -392,11 +465,13 @@ body.dark-mode .side-link.active {
   .dashboard-shell {
     flex-direction: column;
   }
+
   .sidebar {
     width: 100%;
     flex-direction: row;
     flex-wrap: wrap;
   }
+
   .main-panel {
     padding: 16px;
   }

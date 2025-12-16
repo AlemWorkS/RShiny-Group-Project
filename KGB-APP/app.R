@@ -10,15 +10,25 @@ missing <- setdiff(required_packages, rownames(installed.packages()))
 if (length(missing) > 0) {
   install.packages(missing, repos = "https://cloud.r-project.org")
 }
+missing_optional <- setdiff(optional_packages, rownames(installed.packages()))
+if (length(missing_optional) > 0) {
+  try(
+    install.packages(missing_optional, repos = "https://cloud.r-project.org"),
+    silent = TRUE
+  )
+}
 invisible(lapply(required_packages, library, character.only = TRUE, warn.conflicts = FALSE))
 has_rAmCharts <- FALSE
+has_amBoxplot <- FALSE
+has_amHist <- FALSE
+ramcharts_version <- NULL
 if (requireNamespace("rAmCharts", quietly = TRUE)) {
-  needed <- c("amBoxplot", "amHistogram", "amChartsOutput", "renderAmCharts")
-  has_rAmCharts <- all(needed %in% getNamespaceExports("rAmCharts")) &&
-    exists("controlShinyPlot", envir = asNamespace("rAmCharts"), inherits = FALSE)
-  if (has_rAmCharts) {
-    suppressPackageStartupMessages(library(rAmCharts))
-  }
+  suppressPackageStartupMessages(library(rAmCharts))
+  has_rAmCharts <- TRUE
+  ramcharts_version <- tryCatch(as.character(utils::packageVersion("rAmCharts")), error = function(...) NULL)
+  exports <- getNamespaceExports("rAmCharts")
+  has_amBoxplot <- "amBoxplot" %in% exports
+  has_amHist <- "amHist" %in% exports
 }
 
 # Helpers ---------------------------------------------------------------------
@@ -29,6 +39,8 @@ app_colors <- list(
   card = "#ffffff",
   text = "#111827"
 )
+
+"%||%" <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
 load_assure_data <- function() {
   potential <- c("data/MASTER_MIAGE_BASE_ETUDE_1.xlsx", "MASTER_MIAGE_BASE_ETUDE_1.xlsx")
@@ -356,31 +368,45 @@ server <- function(input, output, session) {
   
   output$amcharts_ui <- renderUI({
     if (!has_rAmCharts) {
-      div(class = "info-card",
-          strong("rAmCharts non installe."),
-          p("Installez/chargez rAmCharts (version avec amBoxplot/amHistogram et controlShinyPlot) pour activer ces graphiques.")
-      )
-    } else {
-      tagList(
-        rAmCharts::amChartsOutput("ram_box", height = "320px"),
-        rAmCharts::amChartsOutput("ram_hist", height = "320px")
-      )
+      return(div(class = "info-card",
+                 strong("rAmCharts non installe."),
+                 p("Installez/chargez rAmCharts pour activer ces graphiques."),
+                 p("Commande R : install.packages('rAmCharts') puis relancez l'application.")
+      ))
     }
+    if (!has_amBoxplot || !has_amHist) {
+      missing_fun <- paste(c(
+        if (!has_amBoxplot) "amBoxplot" else NULL,
+        if (!has_amHist) "amHist" else NULL
+      ), collapse = ", ")
+      return(div(class = "info-card",
+                 strong("Fonctions manquantes dans rAmCharts."),
+                 p(sprintf("Fonctions absentes : %s.", missing_fun)),
+                 p(sprintf("Version chargee : %s. Mettez a jour rAmCharts (install.packages('rAmCharts')) puis relancez.", ramcharts_version %||% "inconnue"))
+      ))
+    }
+    tagList(
+      rAmCharts::amChartsOutput("ram_box", height = "320px"),
+      rAmCharts::amChartsOutput("ram_hist", height = "320px")
+    )
   })
   
-  if (has_rAmCharts) {
+  if (has_amBoxplot) {
     output$ram_box <- rAmCharts::renderAmCharts({
       tryCatch(
-        rAmCharts::amBoxplot(x = "Sepal.Length", data = iris, group = "Species"),
+        rAmCharts::amBoxplot(Sepal.Length ~ Species, data = iris, col = "#7c3aed")
+        ,
         error = function(e) {
           shiny::validate(shiny::need(FALSE, paste("Erreur rAmCharts:", conditionMessage(e))))
         }
       )
     })
-    
+  }
+  
+  if (has_amHist) {
     output$ram_hist <- rAmCharts::renderAmCharts({
       tryCatch(
-        rAmCharts::amHistogram(x = iris$Sepal.Length, breaks = 15, col = "#ef4444"),
+        rAmCharts::amHist(x = iris$Sepal.Length, breaks = 15, col = "#ef4444"),
         error = function(e) {
           shiny::validate(shiny::need(FALSE, paste("Erreur rAmCharts:", conditionMessage(e))))
         }
@@ -389,38 +415,42 @@ server <- function(input, output, session) {
   }
   
   output$mpg_anim <- renderImage({
-    validate(need(requireNamespace("gganimate", quietly = TRUE), "gganimate est requis."))
-    tmp <- tempfile(fileext = ".gif")
-    p <- ggplot(mtcars, aes(x = factor(cyl), y = mpg, fill = factor(cyl))) +
-      geom_boxplot(alpha = 0.85) +
-      scale_fill_manual(values = c("#c7d2fe", "#a5b4ff", "#7c3aed")) +
-      labs(
-        title = "Transition par gear: {closest_state}",
-        x = "Cylindres", y = "Consommation (mpg)"
-      ) +
-      gganimate::transition_states(gear, transition_length = 2, state_length = 1) +
-      theme_minimal(base_size = 14) +
-      theme(legend.position = "none")
-    
-    renderer_fun <- NULL
-    if ("renderer_gifski" %in% getNamespaceExports("gganimate")) {
-      renderer_fun <- gganimate::renderer_gifski
-    } else if ("gifski_renderer" %in% getNamespaceExports("gganimate")) {
-      renderer_fun <- gganimate::gifski_renderer
-    }
-    
-    anim <- tryCatch({
-      validate(need(!is.null(renderer_fun), "Mettre a jour gganimate/gifski pour disposer du renderer gifski."))
-      gganimate::animate(
-        p,
-        renderer = renderer_fun(loop = TRUE),
-        width = 700, height = 420
-      )
-    }, error = function(e) {
-      validate(need(FALSE, paste("Renderer gifski manquant ou trop ancien :", conditionMessage(e))))
+    withProgress(message = "Veuillez patienter...", detail = "Generation de l'animation GIF en cours", value = 0, {
+      validate(need(requireNamespace("gganimate", quietly = TRUE), "gganimate est requis."))
+      tmp <- tempfile(fileext = ".gif")
+      p <- ggplot(mtcars, aes(x = factor(cyl), y = mpg, fill = factor(cyl))) +
+        geom_boxplot(alpha = 0.85) +
+        scale_fill_manual(values = c("#c7d2fe", "#a5b4ff", "#7c3aed")) +
+        labs(
+          title = "Transition par gear: {closest_state}",
+          x = "Cylindres", y = "Consommation (mpg)"
+        ) +
+        gganimate::transition_states(gear, transition_length = 2, state_length = 1) +
+        theme_minimal(base_size = 14) +
+        theme(legend.position = "none")
+      
+      renderer_fun <- NULL
+      if ("renderer_gifski" %in% getNamespaceExports("gganimate")) {
+        renderer_fun <- gganimate::renderer_gifski
+      } else if ("gifski_renderer" %in% getNamespaceExports("gganimate")) {
+        renderer_fun <- gganimate::gifski_renderer
+      }
+      
+      incProgress(0.4)
+      anim <- tryCatch({
+        validate(need(!is.null(renderer_fun), "Mettre a jour gganimate/gifski pour disposer du renderer gifski."))
+        gganimate::animate(
+          p,
+          renderer = renderer_fun(loop = TRUE),
+          width = 700, height = 420
+        )
+      }, error = function(e) {
+        validate(need(FALSE, paste("Renderer gifski manquant ou trop ancien :", conditionMessage(e))))
+      })
+      incProgress(0.9)
+      gganimate::anim_save(tmp, animation = anim)
+      list(src = tmp, contentType = "image/gif", alt = "gganimate boxplot", width = "100%", height = "420px")
     })
-    gganimate::anim_save(tmp, animation = anim)
-    list(src = tmp, contentType = "image/gif", alt = "gganimate boxplot", width = "100%")
   }, deleteFile = TRUE)
   
   # Ratios table --------------------------------------------------------------
@@ -486,7 +516,7 @@ ggplot(iris, aes(Sepal.Length, Sepal.Width, color = Petal.Width)) +
       h4("g) rAmCharts"),
       tags$pre("
 amBoxplot(x = 'Sepal.Length', data = iris, group = 'Species')
-amHistogram(x = iris$Sepal.Length, breaks = 15)
+amHist(x = iris$Sepal.Length, breaks = 15)
 "),
       h4("h) Leaflet (fonction coordonnees)"),
       tags$pre("
@@ -539,16 +569,11 @@ df %>%
         class = "dashboard-shell",
         div(
           class = "sidebar",
-          div(class = "brand", span(class = "brand-icon", "B"), span("Business Dashboard")),
+          div(class = "brand", span(class = "brand-icon", "P"), span("Projet Miage 2026")),
           div(class = "nav-block", uiOutput("sidebar_links")),
           div(class = "nav-block muted",
               actionLink("logout", label = span(tags$i(class = "fa-solid fa-arrow-right-from-bracket"), "Se deconnecter"),
                          class = "side-link")
-          ),
-          div(class = "helper-card",
-              img(src = "helper.jpg", class = "helper-img"),
-              strong("Besoin d'aide ?"),
-              p("Nous restons disponibles pour tout support.")
           )
         ),
         div(
@@ -557,13 +582,7 @@ df %>%
             class = "topbar",
             div(
               class = "top-left",
-              h3("Analytics"),
-              dateRangeInput(
-                "daterange",
-                NULL,
-                start = Sys.Date() - 30, end = Sys.Date(),
-                separator = " - "
-              )
+              NULL
             ),
             div(
               class = "top-right",
@@ -584,14 +603,11 @@ df %>%
                 div(
                   class = "hero-card",
                   div(
-                    class = "hero-copy",
-                    h2("Light Theme dashboard"),
-                    p("Visualisez vos indicateurs en un seul endroit, inspire du layout fourni.")
-                  ),
-                  div(
                     id = "hero-carousel",
-                    lapply(carousel_images, function(img) {
-                      tags$img(src = img, class = "carousel-image")
+                    lapply(seq_along(carousel_images), function(i) {
+                      cls <- "carousel-image"
+                      if (i == 1) cls <- paste(cls, "active")
+                      tags$img(src = carousel_images[[i]], class = cls)
                     })
                   )
                 ),
@@ -715,7 +731,7 @@ df %>%
            ),
            qi = div(class = "card", h4("Plotly + dplyr scatter"), plotlyOutput("plotly_scatter")),
            qj = div(class = "card", h4("Boxplot interactif"), plotlyOutput("boxplot_ggplotly")),
-           qk = div(class = "card", h4("gganimate mpg ~ cyl"), imageOutput("mpg_anim"))
+           qk = div(class = "card", h4("gganimate mpg ~ cyl"), imageOutput("mpg_anim", height = "440px"))
     )
   })
   
