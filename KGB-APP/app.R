@@ -278,8 +278,17 @@ server <- function(input, output, session) {
     ggplot(iris, aes(x = Species, y = Sepal.Length, fill = Species)) +
       geom_boxplot(alpha = 0.85) +
       scale_fill_manual(values = c("#7c3aed", "#818cf8", "#38bdf8")) +
+      labs(x = "Species", y = "Sepal length") +
+      theme_minimal(base_size = 14) +
+      theme(legend.position = "none")
+  })
+  
+  output$boxplot_gg_titled <- renderPlot({
+    ggplot(iris, aes(x = Species, y = Sepal.Length, fill = Species)) +
+      geom_boxplot(alpha = 0.85) +
+      scale_fill_manual(values = c("#7c3aed", "#818cf8", "#38bdf8")) +
       labs(
-        title = "Boxplot ggplot2 avec titre",
+        title = "Distribution de Sepal.Length par espece",
         x = "Species", y = "Sepal length"
       ) +
       theme_minimal(base_size = 14) +
@@ -650,6 +659,7 @@ df %>%
                       "Choisissez une question",
                       choices = c(
                         "a. Boxplots base + ggplot2" = "qa",
+                        "c. Ajouter un titre au boxplot ggplot2" = "qc",
                         "d. Scatter Sepal.Width vs Sepal.Length" = "qd",
                         "e. Histogrammes Sepal.Length" = "qe",
                         "f. Scatter degrade Petal.Width" = "qf",
@@ -699,6 +709,11 @@ df %>%
              class = "grid-2",
              div(class = "card", h4("Boxplot base R"), plotOutput("boxplot_base")),
              div(class = "card", h4("Boxplot ggplot2"), plotOutput("boxplot_gg"))
+           ),
+           qc = div(
+             class = "card",
+             h4("Boxplot ggplot2 (avec titre)"),
+             plotOutput("boxplot_gg_titled")
            ),
            qd = div(
              class = "grid-2",
