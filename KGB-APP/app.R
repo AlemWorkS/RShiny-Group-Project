@@ -42,6 +42,14 @@ app_colors <- list(
 
 "%||%" <- function(x, y) if (is.null(x) || length(x) == 0) y else x
 
+format_coords <- function(lat, lon) {
+  dec <- getOption("OutDec")
+  lat_txt <- formatC(lat, format = "f", digits = 5, decimal.mark = dec)
+  lon_txt <- formatC(lon, format = "f", digits = 5, decimal.mark = dec)
+  sep <- if (dec == ",") "; " else ", "
+  paste0(lat_txt, sep, lon_txt)
+}
+
 load_assure_data <- function() {
   potential <- c("data/MASTER_MIAGE_BASE_ETUDE_1.xlsx", "MASTER_MIAGE_BASE_ETUDE_1.xlsx")
   for (p in potential) {
@@ -225,17 +233,32 @@ server <- function(input, output, session) {
   default_point <- data.frame(
     Latitude = 5.3363,
     Longitude = -4.0244,
-    Label = "Ecole de Police d'Abidjan",
+    Label = paste0("Ecole de Police d'Abidjan (", format_coords(5.3363, -4.0244), ")"),
     Added = Sys.time()
   )
   map_points <- reactiveVal(default_point)
   
+  observeEvent(list(input$user_lat, input$user_lon, input$label_coords_only), {
+    req(input$user_lat, input$user_lon)
+    if (isTRUE(input$label_coords_only)) {
+      updateTextInput(session, "user_label", value = format_coords(input$user_lat, input$user_lon))
+    }
+  })
+  
   observeEvent(input$add_point, {
     req(input$user_lat, input$user_lon)
+    coords_label <- format_coords(input$user_lat, input$user_lon)
+    label_text <- if (isTRUE(input$label_coords_only)) {
+      coords_label
+    } else if (nzchar(input$user_label)) {
+      input$user_label
+    } else {
+      "Point utilisateur"
+    }
     new_row <- data.frame(
       Latitude = input$user_lat,
       Longitude = input$user_lon,
-      Label = ifelse(nzchar(input$user_label), input$user_label, "Point utilisateur"),
+      Label = label_text,
       Added = Sys.time()
     )
     map_points(rbind(map_points(), new_row))
@@ -261,7 +284,11 @@ server <- function(input, output, session) {
       )
   })
   
-  output$history_table <- DT::renderDT({
+  output$history_table_data <- DT::renderDT({
+    map_points()
+  }, options = list(pageLength = 5, dom = "tip"), rownames = FALSE)
+  
+  output$history_table_graphics <- DT::renderDT({
     map_points()
   }, options = list(pageLength = 5, dom = "tip"), rownames = FALSE)
   
@@ -649,7 +676,7 @@ df %>%
                     ),
                     div(class = "card",
                         h4("Historique des points leaflet"),
-                        DT::DTOutput("history_table")
+                        DT::DTOutput("history_table_data")
                     )
                   ),
                   tabPanel(
@@ -738,11 +765,12 @@ df %>%
                h4("Leaflet (coordonnees libres)"),
                numericInput("user_lat", "Latitude", value = default_point$Latitude, step = 0.0001),
                numericInput("user_lon", "Longitude", value = default_point$Longitude, step = 0.0001),
+               checkboxInput("label_coords_only", "Label auto (coordonnees)", value = TRUE),
                textInput("user_label", "Label", value = default_point$Label),
                actionButton("add_point", "Ajouter le point", class = "primary-btn"),
                leafletOutput("map_leaflet", height = 320)
              ),
-             div(class = "card", h4("Historique des points"), DT::DTOutput("history_table"))
+             div(class = "card", h4("Historique des points"), DT::DTOutput("history_table_graphics"))
            ),
            qi = div(class = "card", h4("Plotly + dplyr scatter"), plotlyOutput("plotly_scatter")),
            qj = div(class = "card", h4("Boxplot interactif"), plotlyOutput("boxplot_ggplotly")),
